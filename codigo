@@ -1,0 +1,136 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+typedef struct {
+    int from;
+    char read;
+    int to;
+} Transicao;
+
+typedef struct {
+    int estado_inicial;
+    int estados_finais[10];
+    int num_estados_finais;
+    Transicao transicoes[100];
+    int num_transicoes;
+} Automato;
+
+void carregar_automato(const char* arquivo_automato, Automato* automato) {
+    FILE *arquivo = fopen(arquivo_automato, "r");
+    if (!arquivo) {
+        printf("Erro ao abrir arquivo do autômato.\n");
+        exit(1);
+    }
+
+    fscanf(arquivo, "%d", &automato->estado_inicial);
+
+    fscanf(arquivo, "%d", &automato->num_estados_finais);
+    for (int i = 0; i < automato->num_estados_finais; i++) {
+        fscanf(arquivo, "%d", &automato->estados_finais[i]);
+    }
+
+    fscanf(arquivo, "%d", &automato->num_transicoes);
+    for (int i = 0; i < automato->num_transicoes; i++) {
+        fscanf(arquivo, "%d %c %d", &automato->transicoes[i].from, &automato->transicoes[i].read, &automato->transicoes[i].to);
+    }
+
+    fclose(arquivo);
+}
+
+void carregar_testes(const char* arquivo_testes, char entradas[][100], int resultados_esperados[], int* num_testes) {
+    FILE *arquivo = fopen(arquivo_testes, "r");
+    if (!arquivo) {
+        printf("Erro ao abrir arquivo de testes.\n");
+        exit(1);
+    }
+
+    char linha[200];
+    *num_testes = 0;
+
+    while (fgets(linha, sizeof(linha), arquivo)) {
+        char *token = strtok(linha, ";");
+        strcpy(entradas[*num_testes], token);
+
+        token = strtok(NULL, ";");
+        resultados_esperados[*num_testes] = atoi(token);
+
+        (*num_testes)++;
+    }
+
+    fclose(arquivo);
+}
+
+int eh_estado_final(Automato* automato, int estado) {
+    for (int i = 0; i < automato->num_estados_finais; i++) {
+        if (automato->estados_finais[i] == estado) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int processar_entrada(Automato* automato, const char* entrada) {
+    int estado_atual = automato->estado_inicial;
+
+    for (int i = 0; i < strlen(entrada); i++) {
+        char simbolo = entrada[i];
+        int transicao_valida = 0;
+
+        for (int j = 0; j < automato->num_transicoes; j++) {
+            if (automato->transicoes[j].from == estado_atual && automato->transicoes[j].read == simbolo) {
+                estado_atual = automato->transicoes[j].to;
+                transicao_valida = 1;
+                break;
+            }
+        }
+
+        if (transicao_valida) {
+            return 0;
+        }
+    }
+
+    return eh_estado_final(automato, estado_atual);
+}
+
+void simulador(const char* arquivo_automato, const char* arquivo_testes, const char* arquivo_saida) {
+    Automato automato;
+
+    carregar_automato(arquivo_automato, &automato);
+
+    char entradas[100][100];
+    int resultados_esperados[100];
+    int num_testes;
+
+    carregar_testes(arquivo_testes, entradas, resultados_esperados, &num_testes);
+
+    FILE *saida = fopen(arquivo_saida, "w");
+    if (!saida) {
+        printf("Erro ao abrir arquivo de saída.\n");
+        exit(1);
+    }
+
+    for (int i = 0; i < num_testes; i++) {
+        clock_t inicio = clock();
+        int resultado_obtido = processar_entrada(&automato, entradas[i]);
+        clock_t fim = clock();
+
+        double tempo_processamento = (double)(fim - inicio) / CLOCKS_PER_SEC;
+
+        fprintf(saida, "%s;%d;%d;%.6f\n", entradas[i], resultados_esperados[i], resultado_obtido, tempo_processamento);
+    }
+
+    fclose(saida);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 4) {
+        printf("Uso: %s <arquivo_automato> <arquivo_testes> <arquivo_saida>\n", argv[0]);
+        return 1;
+    }
+
+    simulador(argv[1], argv[2], argv[3]);
+
+    return 0;
+}
